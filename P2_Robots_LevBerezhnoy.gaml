@@ -20,6 +20,7 @@ global {
 	
 	reflex {
 		steps <- steps + 1;
+		do get_agents_pos();
 	}
 	
 	reflex stop_game when: steps = 5000{
@@ -28,6 +29,19 @@ global {
 	
 	reflex stop_game2 when: ag_wander all_match (each.color=#black) {
 		do pause;
+	}
+	
+	list<point>	get_agents_pos{
+		list<ag_wander> ag_wanders <- list<ag_wander> (ag_wander where (each.color=#red));
+		list<point> points  <- [];		 
+		loop i over: ag_wanders {
+			ask i{
+				points <- points + self.location;
+			}
+		}
+		
+		write length(points);
+		return points;
 	}
 	
 	action restart {
@@ -44,6 +58,7 @@ global {
 
 species ag_wander skills: [moving] {	
 	float angulo <- 0.0;
+	float speed <- 2.0;
 	rgb color <- #red;
 	
 	action set_velocity(float vt, float vr){
@@ -58,7 +73,7 @@ species ag_wander skills: [moving] {
 	{	
 		if(self.color != #black){
 			angulo <- angulo + rnd(-50,50);
-			do set_velocity(2.0, angulo);
+			do set_velocity(speed, angulo);
 		}
 	}
 	
