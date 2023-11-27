@@ -5,13 +5,13 @@
 * Tags: 
 */
 
-model Wumpus_template
+model Robots_template
 
 global {
 	
 	int steps;
 	int number_agentes <- 50;
-	int number_live_agentes <- 50;	
+
 	float agent_size <- 0.5;
 	
 	matrix<float> vt <- rnd(0.5,2.5) as_matrix({1,number_agentes});
@@ -19,7 +19,6 @@ global {
 	
 	init {
 		create ag_wander number: number_agentes;
-		number_live_agentes <- number_agentes;		
 		steps <- 0;
 	}
 	
@@ -27,13 +26,11 @@ global {
 	reflex {
 		steps <- steps + 1;
 		
-		//write "---------------------------";
 		do get_agents_pos();
 		
-		number_live_agentes <- length(list<ag_wander> (ag_wander where (each.color=#red)));
-		matrix<float> matrix_vt <- rnd(0.5,2.5) as_matrix({1,number_live_agentes});
-		matrix<float> matrix_vr <- rnd(-50.0,50.0) as_matrix({1,number_live_agentes});
-		//write matrix_vt;
+		matrix<float> matrix_vt <- list_with(number_agentes,rnd(1.5,2.5)) as matrix;
+		matrix<float> matrix_vr <- list_with(number_agentes,rnd(-50.0,50.0)) as matrix;
+		
 		do set_agents_vel(matrix_vt, matrix_vr);
 	}
 	
@@ -49,25 +46,18 @@ global {
 		list<point> points;	
 		
 		ask agents of_species ag_wander {
-			//write self.location;
     		points <- points + self.location;
 		}	
 		return points;
 	}
 	
-	action set_agents_vel(matrix<float> vt_loc, matrix<float> vr_loc){
-		matrix speed_matrix <- 0.0 as_matrix({1,length(agents of_species ag_wander)}); 
-		
-		write "---------------------------";		
-		ask agents of_species ag_wander {
-			//speed_matrix <- matrix(speed) + vt_loc;
-			//write self.location;
-			//write "speed " + speed;
-			//write "heading " + heading;
-    		//speed <- speed + vt_loc;
-    		//speed <- speed + vr_loc;
-		}	
-		write speed_matrix;
+	action set_agents_vel(matrix<float> vt_matrix, matrix<float> vr_matrix){
+		ask agents of_species ag_wander 
+		{	
+			if(self.color != #black){	
+				do set_velocity(vt_matrix column_at (agents index_of self) at 0, self.heading + vr_matrix column_at (agents index_of self) at 0);
+			}
+		}
 	}
 	
 	action restart {
@@ -98,7 +88,7 @@ species ag_wander skills: [moving] {
 	reflex do_move
 	{	
 		if(self.color != #black){
-			speed <- rnd(0.5,2.5);
+			speed <- rnd(1.5,2.5);
 			angulo <- angulo + rnd(-50,50);
 			//do set_velocity(speed, angulo);
 		}
