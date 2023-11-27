@@ -11,16 +11,30 @@ global {
 	
 	int steps;
 	int number_agentes <- 50;
+	int number_live_agentes <- 50;	
 	float agent_size <- 0.5;
 	
+	matrix<float> vt <- rnd(0.5,2.5) as_matrix({1,number_agentes});
+	matrix<float> vr <- rnd(-50.0,50.0) as_matrix({1,number_agentes});
+	
 	init {
-		create ag_wander number: number_agentes;		
+		create ag_wander number: number_agentes;
+		number_live_agentes <- number_agentes;		
 		steps <- 0;
 	}
 	
+	
 	reflex {
 		steps <- steps + 1;
+		
+		//write "---------------------------";
 		do get_agents_pos();
+		
+		number_live_agentes <- length(list<ag_wander> (ag_wander where (each.color=#red)));
+		matrix<float> matrix_vt <- rnd(0.5,2.5) as_matrix({1,number_live_agentes});
+		matrix<float> matrix_vr <- rnd(-50.0,50.0) as_matrix({1,number_live_agentes});
+		//write matrix_vt;
+		do set_agents_vel(matrix_vt, matrix_vr);
 	}
 	
 	reflex stop_game when: steps = 5000{
@@ -32,16 +46,28 @@ global {
 	}
 	
 	list<point>	get_agents_pos{
-		list<ag_wander> ag_wanders <- list<ag_wander> (ag_wander where (each.color=#red));
-		list<point> points  <- [];		 
-		loop i over: ag_wanders {
-			ask i{
-				points <- points + self.location;
-			}
-		}
+		list<point> points;	
 		
-		write length(points);
+		ask agents of_species ag_wander {
+			//write self.location;
+    		points <- points + self.location;
+		}	
 		return points;
+	}
+	
+	action set_agents_vel(matrix<float> vt_loc, matrix<float> vr_loc){
+		matrix speed_matrix <- 0.0 as_matrix({1,length(agents of_species ag_wander)}); 
+		
+		write "---------------------------";		
+		ask agents of_species ag_wander {
+			//speed_matrix <- matrix(speed) + vt_loc;
+			//write self.location;
+			//write "speed " + speed;
+			//write "heading " + heading;
+    		//speed <- speed + vt_loc;
+    		//speed <- speed + vr_loc;
+		}	
+		write speed_matrix;
 	}
 	
 	action restart {
@@ -72,8 +98,9 @@ species ag_wander skills: [moving] {
 	reflex do_move
 	{	
 		if(self.color != #black){
+			speed <- rnd(0.5,2.5);
 			angulo <- angulo + rnd(-50,50);
-			do set_velocity(speed, angulo);
+			//do set_velocity(speed, angulo);
 		}
 	}
 	
