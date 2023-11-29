@@ -1,5 +1,5 @@
 /**
-* Name: Plantilla P1 Wumpus. ASM 23/24
+* Name: P2 Robots. ASM 23/24
 * Author: Fidel
 * Student: Lev Berezhnoy
 * Tags: 
