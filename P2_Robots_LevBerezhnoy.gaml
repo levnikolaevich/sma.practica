@@ -77,8 +77,8 @@ species ag_wander skills: [moving] {
 	float speed <- 2.0;
 	rgb color <- #red;
 	
-	action set_velocity(float vt, float vr){
-		do move speed: vt heading: vr;
+	action set_velocity(float vt_, float vr_){
+		do move speed: vt_ heading: vr_;
 	}
 	
 	point get_closest_neighbourd_pos {
