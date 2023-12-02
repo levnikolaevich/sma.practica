@@ -2,17 +2,20 @@ import asyncio
 from typing import Dict
 import numpy as np
 import gym
+import cma
 from gama_client.sync_client import GamaSyncClient
 from gama_client.message_types import MessageTypes
 
 
 async def async_command_answer_handler(message: Dict):
-    print("Here is the answer to an async command: ", message)
+    #print("Here is the answer to an async command: ", message)
+    pass
 
 
 async def gama_server_message_handler(message: Dict):
-    print("I just received a message from Gama-server and it's not an answer to a command!")
-    print("Here it is:", message)
+    #print("I just received a message from Gama-server and it's not an answer to a command!")
+    #print("Here it is:", message)
+    pass
 
 
 class GamaGymEnv(gym.Env):
@@ -71,25 +74,32 @@ class GamaGymEnv(gym.Env):
 
         return np.array(obs), reward, done, {}
 
-    def reset(self):
-        # Сброс среды
-        self.client.sync_expression(self.experiment_id, "do restart;")
-        obs = self.client.sync_expression(self.experiment_id, "ask world { do get_agents_pos(); }")["content"]
-        return np.array(obs)
 
-    def compute_reward(self, obs):
-        # Вычисление вознаграждения на основе текущего состояния
-        # Например, штраф за столкновения
-        reward = 0
-        # ... вычисление вознаграждения ...
-        return reward
+async def run_cmaes(env):
+    # Функция приспособленности для оптимизации CMA-ES
+    def fitness_function(x):
+        total_reward = 0
+        obs = env.reset()
+        for _ in range(5000):  # Допустим, у нас есть 10 шагов в каждом эпизоде
+            obs, reward, done, _ = env.step(x)
+            total_reward += reward
+            if done:
+                break
+        return -total_reward  # CMA-ES минимизирует функцию, поэтому ставим минус
 
-    def is_done(self, obs):
-        # Определение условия завершения эпизода
-        # Например, все агенты столкнулись
-        done = False
-        # ... проверка условия ...
-        return done
+    # Инициализация CMA-ES
+    es = cma.CMAEvolutionStrategy(np.zeros(env.number_agents), 0.5)
+
+    # Основной цикл оптимизации
+    while not es.stop():
+        solutions = es.ask()
+        es.tell(solutions, [fitness_function(x) for x in solutions])
+        es.logger.add()
+        es.disp()
+
+    # Лучшее найденное решение
+    best_solution = es.result.xbest
+    print('Лучшее найденное решение:', best_solution)
 
 
 async def main():
@@ -100,25 +110,29 @@ async def main():
 
     async with GamaGymEnv() as env:
         env.run(gaml_file_path, exp_name, exp_parameters)
+        # await run_cmaes(env)
 
         step = 0
         while step < 10:
+            # Предположим, что matrix_vt и matrix_vr уже созданы
+            matrix_vt = np.full((env.number_agents, 1), 2.0)
+            matrix_vr = np.random.uniform(-50.0, 50.0, size=(env.number_agents, 1))
+
+            # Преобразование матриц NumPy в строки для GAMA запроса
+            vt_str = ','.join([str(v[0]) for v in matrix_vt])
+            vr_str = ','.join([str(v[0]) for v in matrix_vr])
+
+            # Формирование строки запроса
+            gama_command = f"ask world {{ do set_agents_vel(matrix([{vt_str}]),matrix([{vr_str}])); }}"
+            env.client.sync_expression(env.experiment_id, gama_command)
+
             gama_response = env.client.sync_expression(env.experiment_id, r"cycle")
             print("asking simulation the value of: cycle=", gama_response["content"])
 
             gama_response = env.client.sync_expression(env.experiment_id, r"ask world { do get_agents_pos(); }")
-            print("asking simulation the value of: cycle=", gama_response["content"])
+            print("asking simulation the value of: points=", gama_response["content"])
             step += 1
             await asyncio.sleep(2)
-
-    # Пример использования среды
-    # obs = env.reset()
-    # for _ in range(1000):  # Ограничим количество шагов для примера
-    # action = env.action_space.sample()  # Случайные действия для примера
-    # obs, reward, done, _ = env.step(action)
-    # if done:
-    # break
-
 
 if __name__ == "__main__":
     asyncio.run(main())
