@@ -10,7 +10,7 @@ model Robots_template
 global {
 	
 	int current_steps;
-	int limit_steps  <- 10;
+	int limit_steps  <- 5000;
 	int number_agentes <- 50;
 
 	float agent_size <- 0.5;
@@ -92,7 +92,7 @@ species ag_wander skills: [moving] {
 	reflex do_move
 	{	
 		if(self.color != #black){
-			speed <- rnd(1.5,2.5);
+			speed <- 2.0;
 			angulo <- angulo + rnd(-50,50);
 			//do set_velocity(speed, angulo);
 		}
