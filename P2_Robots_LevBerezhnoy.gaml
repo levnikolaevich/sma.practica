@@ -9,7 +9,8 @@ model Robots_template
 
 global {
 	
-	int steps;
+	int current_steps;
+	int limit_steps  <- 10;
 	int number_agentes <- 50;
 
 	float agent_size <- 0.5;
@@ -19,22 +20,23 @@ global {
 	
 	init {
 		create ag_wander number: number_agentes;
-		steps <- 0;
+		current_steps <- 0;
 	}
 	
 	
 	reflex {
-		steps <- steps + 1;
+		current_steps <- current_steps + 1;
 		
 		do get_agents_pos();
 		
-		matrix<float> matrix_vt <- list_with(number_agentes,rnd(1.5,2.5)) as matrix;
+		matrix<float> matrix_vt <- list_with(number_agentes,2.0) as matrix;
 		matrix<float> matrix_vr <- list_with(number_agentes,rnd(-50.0,50.0)) as matrix;
 		
+		//COMENTAR la línea cuando se trabaja con PYTHON
 		do set_agents_vel(matrix_vt, matrix_vr);
 	}
 	
-	reflex stop_game when: steps = 5000{
+	reflex stop_game when: current_steps = limit_steps {
 		do pause;
 	}
 	
@@ -42,11 +44,11 @@ global {
 		do pause;
 	}
 	
-	list<point>	get_agents_pos{
-		list<point> points;	
-		
+	list<map> get_agents_pos{
+		list<map> points;
 		ask agents of_species ag_wander {
-    		points <- points + self.location;
+        	float distance <- self.get_dist_a_closest_neighbourd();
+    		points <- points + list([map('x':: self.location.x, 'y':: self.location.y, 'd':: distance)]);
 		}	
 		return points;
 	}
@@ -61,7 +63,7 @@ global {
 	}
 	
 	action restart {
-		steps <- 0;
+		current_steps <- 0;
 		
 		ask ag_wander
 		{
@@ -81,8 +83,10 @@ species ag_wander skills: [moving] {
 		do move speed: vt_ heading: vr_;
 	}
 	
-	point get_closest_neighbourd_pos {
-		return agent_closest_to(self).location;
+	float get_dist_a_closest_neighbourd {
+		point neighbourd_point <- agent_closest_to(self).location;
+		float distance <- sqrt(abs(neighbourd_point.location.x-self.location.x) ^ 2 + abs(neighbourd_point.location.y-self.location.y) ^ 2);
+		return distance;
 	}
 	
 	reflex do_move

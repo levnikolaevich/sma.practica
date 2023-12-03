@@ -3,18 +3,19 @@ from typing import Dict
 import numpy as np
 import gym
 import cma
+import re
 from gama_client.sync_client import GamaSyncClient
 from gama_client.message_types import MessageTypes
 
 
 async def async_command_answer_handler(message: Dict):
-    #print("Here is the answer to an async command: ", message)
+    # print("Here is the answer to an async command: ", message)
     pass
 
 
 async def gama_server_message_handler(message: Dict):
-    #print("I just received a message from Gama-server and it's not an answer to a command!")
-    #print("Here it is:", message)
+    # print("I just received a message from Gama-server and it's not an answer to a command!")
+    # print("Here it is:", message)
     pass
 
 
@@ -44,7 +45,7 @@ class GamaGymEnv(gym.Env):
         print("closing socket just to be sure")
         self.client.sync_close_connection()
 
-    def run(self, gaml_file_path, exp_name, exp_parameters):
+    def load(self, gaml_file_path, exp_name, exp_parameters):
         print("initialize a gaml model")
         gama_response = self.client.sync_load(gaml_file_path, exp_name, True, True, True, True,
                                               parameters=exp_parameters)
@@ -52,7 +53,7 @@ class GamaGymEnv(gym.Env):
             self.experiment_id = gama_response["content"]
             print(f"experiment_id {self.experiment_id}")
 
-            gama_response = self.client.sync_play(self.experiment_id)
+            # gama_response = self.client.sync_play(self.experiment_id)
 
             if gama_response["type"] != MessageTypes.CommandExecutedSuccessfully.value:
                 print("error while trying to run the experiment", gama_response)
@@ -63,16 +64,45 @@ class GamaGymEnv(gym.Env):
         except Exception as e:
             print("error while initializing", gama_response, e)
 
-    def step(self, action):
-        # Отправка действия в GAMA и получение нового состояния
-        self.client.sync_expression(self.experiment_id, f"do set_agents_vel({action.tolist()}, {action.tolist()})")
-        obs = self.client.sync_expression(self.experiment_id, "ask world { do get_agents_pos(); }")["content"]
+    def step(self, env):
+        matrix_vt = np.full((env.number_agents, 1), 2.0)
+        matrix_vr = np.random.uniform(-50.0, 50.0, size=(env.number_agents, 1))
+
+        # Преобразование матриц NumPy в строки для GAMA запроса
+        vt_str = ','.join([str(v[0]) for v in matrix_vt])
+        vr_str = ','.join([str(v[0]) for v in matrix_vr])
+
+        # Формирование строки запроса
+        gama_command = f"ask world {{ do set_agents_vel(matrix([{vt_str}]),matrix([{vr_str}])); }}"
+        env.client.sync_expression(env.experiment_id, gama_command)
+
+        env.client.sync_step(env.experiment_id)
+
+        cycle_response = env.client.sync_expression(env.experiment_id, r"cycle")["content"]
+        cycle_num = int(cycle_response)
+        print("asking simulation the value of: cycle=", cycle_num)
+
+        points_response = env.client.sync_expression(env.experiment_id, r"ask world { do get_agents_pos(); }")[
+            "content"]
+        matches = re.findall(r'\{([\d.\-]+),([\d.\-]+),[\d.\-]+}', points_response)
+        points_set = set((float(x), float(y)) for x, y in matches)
+        obs = len(points_set)
 
         # Вычисление вознаграждения и проверка завершения эпизода
         reward = self.compute_reward(obs)
-        done = self.is_done(obs)
-
+        done = self.is_done(obs, cycle_num)
+        asyncio.sleep(1)
         return np.array(obs), reward, done, {}
+
+    def compute_reward(self, number_of_live_points):
+        # Больше вознаграждения за большее количество оставшихся живых точек
+        reward = number_of_live_points
+        return reward
+
+    def is_done(self, number_of_live_points, current_step):
+        # Эпизод завершается, если нет живых точек или если прошло 4850 шагов
+        done = number_of_live_points == 0 or current_step >= 4850
+        return done
 
 
 async def run_cmaes(env):
@@ -80,8 +110,8 @@ async def run_cmaes(env):
     def fitness_function(x):
         total_reward = 0
         obs = env.reset()
-        for _ in range(5000):  # Допустим, у нас есть 10 шагов в каждом эпизоде
-            obs, reward, done, _ = env.step(x)
+        for _ in range(4900):  # Допустим, у нас есть 10 шагов в каждом эпизоде
+            obs, reward, done, _ = env.step(env)
             total_reward += reward
             if done:
                 break
@@ -109,12 +139,12 @@ async def main():
     exp_parameters = [{"type": "int", "name": "number_agentes", "value": 55}]
 
     async with GamaGymEnv() as env:
-        env.run(gaml_file_path, exp_name, exp_parameters)
+        env.load(gaml_file_path, exp_name, exp_parameters)
+
         # await run_cmaes(env)
 
         step = 0
         while step < 10:
-            # Предположим, что matrix_vt и matrix_vr уже созданы
             matrix_vt = np.full((env.number_agents, 1), 2.0)
             matrix_vr = np.random.uniform(-50.0, 50.0, size=(env.number_agents, 1))
 
@@ -126,13 +156,20 @@ async def main():
             gama_command = f"ask world {{ do set_agents_vel(matrix([{vt_str}]),matrix([{vr_str}])); }}"
             env.client.sync_expression(env.experiment_id, gama_command)
 
-            gama_response = env.client.sync_expression(env.experiment_id, r"cycle")
-            print("asking simulation the value of: cycle=", gama_response["content"])
+            env.client.sync_step(env.experiment_id)
 
-            gama_response = env.client.sync_expression(env.experiment_id, r"ask world { do get_agents_pos(); }")
-            print("asking simulation the value of: points=", gama_response["content"])
+            cycle_response = env.client.sync_expression(env.experiment_id, r"cycle")["content"]
+            print("asking simulation the value of: cycle=", int(cycle_response))
+
+            points_response = env.client.sync_expression(env.experiment_id, r"ask world { do get_agents_pos(); }")[
+                "content"]
+            matches = re.findall(r'\{x=([\d.\-]+), y=([\d.\-]+), d=([\d.\-]+)}', points_response)
+            points_set = set((round(float(x), 2), round(float(y), 2), round(float(d), 2)) for x, y, d in matches)
+            print("asking simulation the value of: points=", points_set)
+
             step += 1
             await asyncio.sleep(2)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
