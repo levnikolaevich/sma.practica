@@ -15,25 +15,27 @@ global {
 
 	float agent_size <- 0.5;
 	
-	matrix<float> vt <- rnd(0.5,2.5) as_matrix({1,number_agentes});
-	matrix<float> vr <- rnd(-50.0,50.0) as_matrix({1,number_agentes});
+	float avoidance_distance <- 1.0;
+	int collisions <- 0;
+	bool external_launch <- false;
+	bool batch_experiment <- false; //establecer 'true' antes de ejecutar el experimento 'avoidance_distance_optimization'
 	
 	init {
 		create ag_wander number: number_agentes;
 		current_steps <- 0;
-	}
-	
-	
+		collisions <- 0;
+	}	
+
 	reflex {
 		current_steps <- current_steps + 1;
 		
-		do get_agents_pos();
-		
-		matrix<float> matrix_vt <- list_with(number_agentes,2.0) as matrix;
-		matrix<float> matrix_vr <- list_with(number_agentes,rnd(-50.0,50.0)) as matrix;
-		
-		//COMENTAR la línea cuando se trabaja con PYTHON
-		do set_agents_vel(matrix_vt, matrix_vr);
+		if(not batch_experiment and not external_launch){
+			write get_agents_pos();
+						
+			matrix<float> matrix_vt <- list_with(number_agentes,2.0) as matrix;
+			matrix<float> matrix_vr <- list_with(number_agentes,rnd(-50.0,50.0)) as matrix;
+			do set_agents_vel(matrix_vt, matrix_vr);
+		}		
 	}
 	
 	reflex stop_game when: current_steps = limit_steps {
@@ -79,8 +81,8 @@ species ag_wander skills: [moving] {
 	float speed <- 2.0;
 	rgb color <- #red;
 	
-	action set_velocity(float vt_, float vr_){
-		do move speed: vt_ heading: vr_;
+	action set_velocity(float vt, float vr){
+		do move speed: vt heading: vr;
 	}
 	
 	float get_dist_a_closest_neighbourd {
@@ -91,17 +93,26 @@ species ag_wander skills: [moving] {
 	
 	reflex do_move
 	{	
-		if(self.color != #black){
-			speed <- 2.0;
-			angulo <- angulo + rnd(-50,50);
-			//do set_velocity(speed, angulo);
-		}
+		if(batch_experiment and not external_launch){
+			if(self.color != #black){
+				float distance <- get_dist_a_closest_neighbourd();
+				speed <- 2.0;
+				
+				if(distance < avoidance_distance){
+					angulo <- angulo + rnd(-90,90);
+				} else {
+					angulo <- angulo + rnd(-50,50);
+				}
+				do set_velocity(speed, angulo);
+			}
+		}			
 	}
 	
 	reflex collision {
 		list<ag_wander> col <- list<ag_wander>(agents at_distance(agent_size));
 		
 		ask col {
+			collisions <- collisions + 1;
 			self.color <- #black;
 		}
 	}
@@ -127,3 +138,13 @@ experiment Robots_experimento type: gui {
 		}
 	}
 }
+
+experiment avoidance_distance_optimization type: batch until: paused = true repeat:4 {
+    parameter 'avoidance_distance:' var: avoidance_distance min: 0.5 max: 5.0 step: 0.5;
+
+    method genetic 
+        minimize: collisions
+        pop_dim: 10 crossover_prob: 0.7 mutation_prob: 0.1 
+        nb_prelim_gen: 2 max_gen: 20; 
+}
+
