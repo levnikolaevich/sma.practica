@@ -15,10 +15,10 @@ global {
 
 	float agent_size <- 0.5;
 	
-	float avoidance_distance <- 1.0;
+	float avoidance_distance <- 3.0;
 	int collisions <- 0;
 	bool external_launch <- false;
-	bool batch_experiment <- false; //establecer 'true' antes de ejecutar el experimento 'avoidance_distance_optimization'
+	bool batch_experiment <- true; //establecer 'true' antes de ejecutar el experimento 'avoidance_distance_optimization'
 	
 	init {
 		create ag_wander number: number_agentes;
@@ -30,7 +30,7 @@ global {
 		current_steps <- current_steps + 1;
 		
 		if(not batch_experiment and not external_launch){
-			write get_agents_pos();
+			//write get_agents_pos();
 						
 			matrix<float> matrix_vt <- list_with(number_agentes,2.0) as matrix;
 			matrix<float> matrix_vr <- list_with(number_agentes,rnd(-50.0,50.0)) as matrix;
@@ -136,15 +136,31 @@ experiment Robots_experimento type: gui {
 			grid gworld border: #white;
 			species ag_wander aspect:base;
 		}
+		display "robots_stats"  type: 2d {
+			// display some statistics about the robots
+			chart "number robots" type:series position:{0.0,0.0} size:{0.5,0.5} {
+				data "Lived" value: length(ag_wander where (each.color=#red)) color:#red;
+				data "Died" value: length(ag_wander where (each.color=#black)) color:#black;
+			}			
+		}
 	}
 }
 
-experiment avoidance_distance_optimization type: batch until: paused = true repeat:4 {
+experiment avoidance_distance_optimization type: batch until: ag_wander all_match (each.color=#black) or current_steps = limit_steps repeat:10 {
     parameter 'avoidance_distance:' var: avoidance_distance min: 0.5 max: 5.0 step: 0.5;
 
     method genetic 
         minimize: collisions
-        pop_dim: 10 crossover_prob: 0.7 mutation_prob: 0.1 
+        pop_dim: 20 crossover_prob: 0.7 mutation_prob: 0.1 
         nb_prelim_gen: 2 max_gen: 20; 
+	
+	output {					
+		display "robots_stats"  type: 2d {
+			// display some statistics about the robots
+			chart "number robots" type:series position:{0.0,0.0} size:{0.5,0.5} {
+				data "Lived" value: length(ag_wander where (each.color=#red)) color:#red;
+				data "Died" value: length(ag_wander where (each.color=#black)) color:#black;
+			}			
+		}
+	}
 }
-
